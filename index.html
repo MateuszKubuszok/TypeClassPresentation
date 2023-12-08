@@ -415,23 +415,24 @@ ul.byline li + li {
 }
 </style><script>window.MathJax = {"tex":{"inlineMath":[["\\(", "\\)"]], "displayMath":[["\\[", "\\]"]], "processEscapes":false, "tags":"none"}, "options":{"ignoreHtmlClass":"nostem|nolatexmath"}, "asciimath":{"delimiters":[["\\$", "\\$"]]}, "loader":{"load":["input/asciimath", "output/chtml", "ui/menu"]}};</script><script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.0/es5/tex-mml-chtml.js"></script></head><body><div class="reveal"><div class="slides"><section class="title" data-state="title"><h1>Type classes</h1><div class="preamble"><div class="paragraph"><p><strong>More than just strategy pattern</strong></p></div>
 <div class="paragraph"><p>Mateusz Kubuszok</p></div>
-<div class="paragraph"><p>TODO: add stuff from the template</p></div>
 <aside class="notes"><div class="paragraph"><p>Preparations:
+- (on Mac): enable workspaces to share 1 screen constantly
 - open terminal - 1 tab for examples
+- increase terminal font size to 40pt
 - arrange them to easily jump from one to another
 - put speakers notes on laptop</p></div></aside></div></section>
 <section id="_about_me"><h2>About me</h2><div class="slide-content"><div class="ulist"><ul><li class="fragment"><p>breaking things in Scala for 8+ years</p></li><li class="fragment"><p>breaking things for money for 11 years</p></li><li class="fragment"><p>breaking things for fun for 19 years</p></li><li class="fragment"><p>a little bit of open source - including co-authoring Chimney for 6 years now</p></li><li class="fragment"><p>blog at <a href="https://kubuszok.com">Kubuszok.com</a></p></li><li class="fragment"><p>niche <a href="https://leanpub.com/jvm-scala-book">Things you need to know about JVM (that matter in Scala)</a> ebook</p></li></ul></div>
 <aside class="notes"><div class="paragraph"><p>Every presentation should start with some excuse, why you even are here.</p></div></aside></div></section>
-<section id="_agenda"><h2>Agenda</h2><div class="slide-content"><div class="ulist"><ul><li class="fragment"><p>TODO</p><div class="olist arabic"><ol class="arabic"><li><p>example of a good old strategy pattern (to refresh the audience&#8217;s memory)</p></li><li><p>adding generics to the picture (strategy methods parametrized with generic type, to distinct between implementations intended for different types)</p></li><li><p>letting compiler pass the strategy around (implicits/using/given keywords in Scala)</p></li><li><p>extension methods make strategy usage feel more natural</p></li><li><p>definition of a type class</p></li><li><p>case class + sealed trait/enum (Scala&#8217;s blessed data types)</p></li><li><p>showing how implementations can be generated out of implementations for primitives + rules for combining implementations (Show type class generated with Magnolia)</p></li><li><p>examples of libraries which generate implementations this way: JSON codecs, config parsers, args parsers, data/type mappers&#8230;&#8203;</p></li><li><p>summary</p></li><li><p>optional bonus if there will be enough time - showing how type classes can be used to define a whole application&#8217;s architecture (tagless final)</p></li></ol></div></li></ul></div>
+<section id="_agenda"><h2>Agenda</h2><div class="slide-content"><div class="ulist"><ul><li class="fragment"><p>what is is a strategy</p></li><li class="fragment"><p>how to get from strategy pattern to type class pattern</p></li><li class="fragment"><p>code generation</p></li><li class="fragment"><p>some real world example</p></li></ul></div>
 <aside class="notes"></aside></div></section>
-<section id="_strategy_pattern"><h2>Strategy pattern</h2><div class="slide-content"><div class="listingblock fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">trait Discount {
+<section id="_strategy_pattern"><h2>Strategy pattern</h2><div class="slide-content"><div class="listingblock fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">trait DiscountStrategy {
   def apply(price: Int): Int
 }
 
 def applyDiscounts(
     item: Item, // case class Item(name: String, price: Int)
     quantity: Int,
-    discount: Option[Discount]
+    discount: Option[DiscountStrategy]
 ): (Int, Int) = {
   val price = item.price * quantity
   val discounted = discount.fold(price)(_.apply(price))
@@ -441,23 +442,33 @@ def applyDiscounts(
 <aside class="notes"><div class="paragraph"><p>Show <code>bat example_1_strategy/\*</code>.
 Run <code>scala-cli run example_1_strategy</code> as an example.</p></div>
 <div class="paragraph"><p>Mention that this is super generic, but if we understand the mechanism, we can use that understanding in the next example.</p></div></aside></div></section>
-<section id="_strategy_with_generics"><h2>Strategy with generics</h2><div class="slide-content"><div class="listingblock fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">trait Show[A] {
+<section id="_strategy_with_generics"><h2>Strategy with generics</h2><div class="slide-content"><div class="listingblock fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">// in Java it would be:
+// interface Show&lt;A&gt; { ... }
+trait Show[A] {
   def show(a: A): String
 }
 
 def show[A](value: A)(show: Show[A]): String =
   show.show(value)</code></pre></div></div>
-<div class="listingblock fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">val tpe: Tpe
-val shoeTpe: Show[Tpe] = value =&gt; s"Tpe(${value.field})" // SAM
+<div class="listingblock fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">class Example(val fiels: String)
 
-show(tpe)(showTpe)</code></pre></div></div>
+val example: Example = new Example("test")
+
+val showExample: Show[Example] =
+  // Single Abstract Method syntax:
+  // creates new Show[Example] { ... }
+  // as if it was a function
+  value =&gt; s"Example(${value.field})"
+
+show(example)(showExample)</code></pre></div></div>
 <aside class="notes"><div class="paragraph"><p>This example is not meant to be practical. It is meant to be obvious what it does.
 It let us define generic algorithm and then force usage of a strategy matching the type of value.</p></div>
 <div class="paragraph"><p>Explain single abstract method.</p></div>
 <div class="paragraph"><p>Show <code>bat example_2_strategy_but_typed/\*</code>.
 Run <code>scala-cli run example_2_strategy_but_typed</code> as an example.</p></div>
 <div class="paragraph"><p>Compare <code>toString</code> to <code>show</code>.</p></div>
-<div class="paragraph"><p>Mention that this way we can provide implementation for final classes which we cannot modify.</p></div>
+<div class="paragraph"><p>Mention that this way we can provide implementation for <code>final</code> classes which we cannot modify.</p></div>
+<div class="paragraph"><p>Mention that it helps us implement Open-Closed principle from SOLID - we can add/change functionality without modifying the existing algorithm.</p></div>
 <div class="paragraph"><p>Mention that it looks kinda boilerplate&#8217;y, so let&#8217;s address that.</p></div></aside></div></section>
 <section id="_implicits_and_extension_methods"><h2>Implicits and extension methods</h2><div class="slide-content"><div class="listingblock fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">trait Show[A] {
   def show(a: A): String
@@ -465,14 +476,18 @@ Run <code>scala-cli run example_2_strategy_but_typed</code> as an example.</p></
 
 extension [A](value: A)
   def show(using show: Show[A]): String = show.show(value)</code></pre></div></div>
-<div class="listingblock fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">val tpe: Tpe
-given showTpe: Show[Tpe] = value =&gt; s"Tpe(${value.field})"
+<div class="listingblock fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">class Example(val fiels: String)
+val example: Example = new Example("test")
 
-tpe.show // showTpe is passed for us</code></pre></div></div>
-<div class="listingblock fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">val tpe: Tpe
-given Show[Tpe] = value =&gt; s"Tpe(${value.field})"
+given showExample: Show[Example] =
+  value =&gt; s"Example(${value.field})"
 
-tpe.show // anonymous Show[Tpe] is passed for us</code></pre></div></div>
+example.show(using showExample)</code></pre></div></div>
+<div class="listingblock fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">example.show // showExample is passed for us</code></pre></div></div>
+<div class="listingblock fragment"><div class="content"><pre class="highlightjs highlight"><code class="language-scala hljs" data-noescape="true" data-lang="scala">given Show[Example] =
+  value =&gt; s"Example(${value.field})"
+
+example.show // anonymous Show[Example] is passed for us</code></pre></div></div>
 <aside class="notes"><div class="paragraph"><p>Explain extension method syntax.</p></div>
 <div class="paragraph"><p>Explain that <code>using</code> is kinda special.</p></div>
 <div class="paragraph"><p>Explain that <code>given</code> would wire value to using.</p></div>
@@ -500,20 +515,21 @@ given [A, B](using A: Show[A], B: Show[B]): Show[(A, B)] = {
 <div class="paragraph"><p>Show <code>bat example_4_tuples_arrays/\*</code>.
 Run <code>scala-cli run example_4_tuples_arrays</code> as an example.</p></div>
 <div class="paragraph"><p>Mention that we shouldn&#8217;t limit ourselves to just tuples and that providing code for each arity would be tireing.</p></div></aside></div></section>
-<section><section id="_type_class_derivation"><h2>Type class derivation</h2><div class="slide-content"><div class="paragraph fragment"><p>Generating a type class for some type using:</p></div><div class="ulist"><ul><li class="fragment"><p>type classes for its components (record&#8217;s fields, subtypes)</p></li><li class="fragment"><p>some logic how to combine/dispatch to components' type classes</p></li></ul></div><aside class="notes"><div class="paragraph"><p>Mention that this is basically a code generation, but one that matches some existing interface.</p></div>
+<section id="_type_class_derivation"><h2>Type class derivation</h2><div class="slide-content"><div class="paragraph fragment"><p>Generating a type class for some type using:</p></div>
+<div class="ulist"><ul><li class="fragment"><p>type classes for its components (record&#8217;s fields, subtypes)</p></li><li class="fragment"><p>some logic how to combine/dispatch to components' type classes</p></li></ul></div>
+<aside class="notes"><div class="paragraph"><p>Mention that this is basically a code generation, but one that matches some existing interface.</p></div>
 <div class="paragraph"><p>Mention that it is best undetstood by example.</p></div>
 <div class="paragraph"><p>Show <code>bat example_5_derivation/\*</code>.
-Run <code>scala-cli run example_5_derivation</code> as an example.</p></div></aside></div></section><section><div class="slide-content"><div class="paragraph"><p>Tools for performing type class derivation:</p></div>
-<div class="ulist"><ul><li class="fragment"><p>Shapeless library</p></li><li class="fragment"><p>Mirrors (Scala 3 only)</p></li><li class="fragment"><p>Magnolia library</p></li><li class="fragment"><p>macros</p></li></ul></div>
-<aside class="notes"><div class="paragraph"><p>Mention that we won&#8217;t delve into details how to use these tools as they are mostly used by librarys' authors, and instead we would show some real world examples.</p></div>
-<div class="paragraph"><p>Because we aren&#8217;t interested just in academic overcomplicated way of producing strings.</p></div></aside></div></section></section>
-<section id="_examples_of_type_class_based_solutions"><h2>Examples of type class based solutions</h2><div class="slide-content"><div class="ulist"><ul><li class="fragment"><p>JSON serialization</p></li><li class="fragment"><p>config parsing</p></li><li class="fragment"><p>type mapping</p></li><li class="fragment"><p>Swagger schema generation (TODO)</p></li></ul></div>
+Run <code>scala-cli run example_5_derivation</code> as an example.</p></div></aside></div></section>
+<section id="_examples_of_type_class_based_solutions"><h2>Examples of type-class-based solutions</h2><div class="slide-content"><div class="ulist"><ul><li class="fragment"><p>JSON serialization</p></li><li class="fragment"><p>config parsing</p></li><li class="fragment"><p>type mapping</p></li></ul></div>
 <aside class="notes"><div class="paragraph"><p>Mention that we don&#8217;t want to limit ourselves to just JSON because Java devs already know Jackson.</p></div>
 <div class="paragraph"><p>Show <code>bat example_6_real_world_example/\*</code>.
-Run <code>scala-cli run example_6_real_world_example</code> as an example.</p></div></aside></div></section>
-<section id="_summary"><h2>Summary</h2><div class="slide-content"><div class="paragraph"><p>TODO</p></div></div></section>
+Run <code>scala-cli run example_6_real_world_example</code> as an example.</p></div>
+<div class="paragraph"><p>Commands - run them in a separate tab:</p></div>
+<div class="olist arabic"><ol class="arabic"><li><p><code>curl -XGET <a href="http://localhost:8080/memos/my-secret-memo/?passwd=bad-pass" class="bare">http://localhost:8080/memos/my-secret-memo/?passwd=bad-pass</a></code></p></li><li><p><code>curl -XGET <a href="http://localhost:8080/memos/my-secret-memo/?passwd=secret-pass" class="bare">http://localhost:8080/memos/my-secret-memo/?passwd=secret-pass</a></code></p></li><li><p><code>curl -XPUT 'http://localhost:8080/memos/my-secret-memo/?passwd=secret-pass' -d '{ "content": "My note&#8217;s content", "name": "My Secret Note" }'</code></p></li><li><p><code>curl -XGET <a href="http://localhost:8080/memos/my-secret-memo/?passwd=secret-pass" class="bare">http://localhost:8080/memos/my-secret-memo/?passwd=secret-pass</a></code></p></li></ol></div></aside></div></section>
+<section id="_summary"><h2>Summary</h2><div class="slide-content"><div class="ulist"><ul><li class="fragment"><p>(on JVM) type class can be understood as a strategy patter</p></li><li class="fragment"><p>with a (type-based) dependency injection</p></li><li class="fragment"><p>and a code generation</p></li><li class="fragment"><p>slides and examples available on my GitHub profile <a href="https://github.com/MateuszKubuszok/">GitHub.com/MateuszKubuszok</a></p></li></ul></div></div></section>
 <section id="_questions"><h2>Questions?</h2></section>
-<section id="_thank_you"><h2>Thank You!</h2><div class="slide-content"><div class="paragraph"><p>TODO: add QR code with "rate me"</p></div></div></section></div></div><script src="./reveal.js/dist/reveal.js"></script><script>Array.prototype.slice.call(document.querySelectorAll('.slides section')).forEach(function(slide) {
+<section id="_thank_you"><h2>Thank You!</h2></section></div></div><script src="./reveal.js/dist/reveal.js"></script><script>Array.prototype.slice.call(document.querySelectorAll('.slides section')).forEach(function(slide) {
   if (slide.getAttribute('data-background-color')) return;
   // user needs to explicitly say he wants CSS color to override otherwise we might break custom css or theme (#226)
   if (!(slide.classList.contains('canvas') || slide.classList.contains('background'))) return;

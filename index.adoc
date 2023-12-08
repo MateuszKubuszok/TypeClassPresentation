@@ -7,12 +7,12 @@
 
 Mateusz Kubuszok
 
-TODO: add stuff from the template
-
 [NOTE.speaker]
 --
 Preparations:
+- (on Mac): enable workspaces to share 1 screen constantly
 - open terminal - 1 tab for examples
+- increase terminal font size to 40pt
 - arrange them to easily jump from one to another
 - put speakers notes on laptop
 --
@@ -35,18 +35,10 @@ Every presentation should start with some excuse, why you even are here.
 == Agenda
 
 [%step]
-* TODO
-
-1. example of a good old strategy pattern (to refresh the audience's memory)
-2. adding generics to the picture (strategy methods parametrized with generic type, to distinct between implementations intended for different types)
-3. letting compiler pass the strategy around (implicits/using/given keywords in Scala)
-4. extension methods make strategy usage feel more natural
-5. definition of a type class
-6. case class + sealed trait/enum (Scala's blessed data types)
-7. showing how implementations can be generated out of implementations for primitives + rules for combining implementations (Show type class generated with Magnolia)
-8. examples of libraries which generate implementations this way: JSON codecs, config parsers, args parsers, data/type mappers...
-9. summary
-10. optional bonus if there will be enough time - showing how type classes can be used to define a whole application's architecture (tagless final)
+* what is is a strategy
+* how to get from strategy pattern to type class pattern
+* code generation
+* some real world example
 
 [NOTE.speaker]
 --
@@ -58,14 +50,14 @@ Every presentation should start with some excuse, why you even are here.
 [%step]
 [source, scala]
 ----
-trait Discount {
+trait DiscountStrategy {
   def apply(price: Int): Int
 }
 
 def applyDiscounts(
     item: Item, // case class Item(name: String, price: Int)
     quantity: Int,
-    discount: Option[Discount]
+    discount: Option[DiscountStrategy]
 ): (Int, Int) = {
   val price = item.price * quantity
   val discounted = discount.fold(price)(_.apply(price))
@@ -90,6 +82,8 @@ Mention that this is super generic, but if we understand the mechanism, we can u
 [%step]
 [source, scala]
 ----
+// in Java it would be:
+// interface Show<A> { ... }
 trait Show[A] {
   def show(a: A): String
 }
@@ -101,10 +95,17 @@ def show[A](value: A)(show: Show[A]): String =
 [%step]
 [source, scala]
 ----
-val tpe: Tpe
-val shoeTpe: Show[Tpe] = value => s"Tpe(${value.field})" // SAM
+class Example(val fiels: String)
 
-show(tpe)(showTpe)
+val example: Example = new Example("test")
+
+val showExample: Show[Example] =
+  // Single Abstract Method syntax:
+  // creates new Show[Example] { ... }
+  // as if it was a function
+  value => s"Example(${value.field})"
+
+show(example)(showExample)
 ----
 
 [NOTE.speaker]
@@ -119,7 +120,9 @@ Run ``scala-cli run example_2_strategy_but_typed`` as an example.
 
 Compare ``toString`` to ``show``.
 
-Mention that this way we can provide implementation for final classes which we cannot modify.
+Mention that this way we can provide implementation for ``final`` classes which we cannot modify.
+
+Mention that it helps us implement Open-Closed principle from SOLID - we can add/change functionality without modifying the existing algorithm.
 
 Mention that it looks kinda boilerplate'y, so let's address that.
 --
@@ -140,19 +143,28 @@ extension [A](value: A)
 [%step]
 [source, scala]
 ----
-val tpe: Tpe
-given showTpe: Show[Tpe] = value => s"Tpe(${value.field})"
+class Example(val fiels: String)
+val example: Example = new Example("test")
 
-tpe.show // showTpe is passed for us
+given showExample: Show[Example] =
+  value => s"Example(${value.field})"
+
+example.show(using showExample)
 ----
 
 [%step]
 [source, scala]
 ----
-val tpe: Tpe
-given Show[Tpe] = value => s"Tpe(${value.field})"
+example.show // showExample is passed for us
+----
 
-tpe.show // anonymous Show[Tpe] is passed for us
+[%step]
+[source, scala]
+----
+given Show[Example] =
+  value => s"Example(${value.field})"
+
+example.show // anonymous Show[Example] is passed for us
 ----
 
 [NOTE.speaker]
@@ -238,30 +250,12 @@ Show ``bat example_5_derivation/\*``.
 Run ``scala-cli run example_5_derivation`` as an example.
 --
 
-=== !
-
-Tools for performing type class derivation:
-
-[%step]
-- Shapeless library
-- Mirrors (Scala 3 only)
-- Magnolia library
-- macros
-
-[NOTE.speaker]
---
-Mention that we won't delve into details how to use these tools as they are mostly used by librarys' authors, and instead we would show some real world examples.
-
-Because we aren't interested just in academic overcomplicated way of producing strings.
---
-
-== Examples of type class based solutions
+== Examples of type-class-based solutions
 
 [%step]
 - JSON serialization
 - config parsing
 - type mapping
-- Swagger schema generation (TODO)
 
 [NOTE.speaker]
 --
@@ -269,14 +263,23 @@ Mention that we don't want to limit ourselves to just JSON because Java devs alr
 
 Show ``bat example_6_real_world_example/\*``.
 Run ``scala-cli run example_6_real_world_example`` as an example.
+
+Commands - run them in a separate tab:
+
+1. ``curl -XGET http://localhost:8080/memos/my-secret-memo/?passwd=bad-pass``
+2. ``curl -XGET http://localhost:8080/memos/my-secret-memo/?passwd=secret-pass``
+3. ``curl -XPUT 'http://localhost:8080/memos/my-secret-memo/?passwd=secret-pass' -d '{ "content": "My note's content", "name": "My Secret Note" }'``
+4. ``curl -XGET http://localhost:8080/memos/my-secret-memo/?passwd=secret-pass``
 --
 
 == Summary
 
-TODO
+[%step]
+- (on JVM) type class can be understood as a strategy patter
+- with a (type-based) dependency injection
+- and a code generation
+- slides and examples available on my GitHub profile https://github.com/MateuszKubuszok/[GitHub.com/MateuszKubuszok]
 
 == Questions?
 
 == Thank You!
-
-TODO: add QR code with "rate me"
